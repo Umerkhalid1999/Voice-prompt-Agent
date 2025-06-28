@@ -11,26 +11,23 @@ import whisper
 import requests
 import threading
 import time
+from dotenv import load_dotenv
+from TTS_edge import EdgeTTSEngine
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class ContinuousVoiceChat:
-    def __init__(self, api_key=None):
-        # Try multiple ways to get the API key
-        self.api_key = "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" or os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENROUTER_API_KEY'.lower())
-
-        # If still no key, try to read from a config file
-        if not self.api_key and os.path.exists('api_key.txt'):
-            try:
-                with open('api_key.txt', 'r') as f:
-                    self.api_key = f.read().strip()
-            except:
-                pass
+    def __init__(self, api_key=None, enable_voice_response=True, voice="en-US-AriaNeural"):
+        # Get API key from .env file
+        self.api_key = api_key or os.getenv('OPENROUTER_API_KEY')
 
         if not self.api_key:
-            raise ValueError("API key not found. Try one of these methods:\n"
-                             "1. Pass it directly: ContinuousVoiceChat('your_key')\n"
-                             "2. Create api_key.txt file with your key\n"
-                             "3. Set environment variable (Windows): set OPENROUTER_API_KEY=your_key")
+            raise ValueError("API key not found! Please:\n"
+                             "1. Copy 'env_template' to '.env'\n"
+                             "2. Add your OpenRouter API key to the .env file\n"
+                             "3. Make sure .env file is in the same directory as this script")
 
         # Audio settings
         self.chunk = 1024
@@ -40,9 +37,27 @@ class ContinuousVoiceChat:
         self.silence_threshold = 500  # Adjust based on your mic
         self.silence_duration = 2  # Stop recording after 2 seconds of silence
 
+        # Voice response settings
+        self.enable_voice_response = enable_voice_response
+
         # Load Whisper
         print("Loading Whisper...")
         self.whisper_model = whisper.load_model("base")
+        
+        # Load TTS Engine
+        if self.enable_voice_response:
+            print("Loading Text-to-Speech engine...")
+            try:
+                self.tts_engine = EdgeTTSEngine(voice=voice)
+                print(f"🔊 Voice response enabled with {voice}")
+            except Exception as e:
+                print(f"⚠️ TTS failed to load: {e}")
+                print("Continuing with text-only responses...")
+                self.enable_voice_response = False
+                self.tts_engine = None
+        else:
+            self.tts_engine = None
+        
         print("Ready! Start speaking...")
 
         self.audio = pyaudio.PyAudio()
@@ -142,6 +157,16 @@ class ContinuousVoiceChat:
             if response.status_code == 200:
                 ai_response = response.json()["choices"][0]["message"]["content"]
                 print(f"DeepSeek: {ai_response}\n")
+                
+                # Add voice response if enabled
+                if self.enable_voice_response and self.tts_engine:
+                    print("🔊 Converting response to speech...")
+                    try:
+                        self.tts_engine.speak(ai_response)
+                        print("✅ AI response spoken")
+                    except Exception as e:
+                        print(f"⚠️ Voice response failed: {e}")
+                
                 return ai_response
             elif response.status_code == 401:
                 print("❌ API Error: Invalid API key")
@@ -165,7 +190,14 @@ class ContinuousVoiceChat:
 
     def run(self):
         """Main continuous loop"""
-        print("🎯 Continuous Voice Chat Started!")
+        print("🎯 Voice Conversational AI Started!")
+        print("🎙️ Features:")
+        print("   ✅ Speech-to-Text (Whisper)")
+        print("   ✅ AI Responses (DeepSeek-R1)")
+        if self.enable_voice_response:
+            print("   ✅ Text-to-Speech (Edge TTS)")
+        else:
+            print("   ❌ Text-to-Speech (Disabled)")
         print("💡 Tip: Speak clearly and pause when done")
         print("⏹️  Press Ctrl+C to exit\n")
 
@@ -203,19 +235,27 @@ class ContinuousVoiceChat:
 # Simple usage
 if __name__ == "__main__":
     try:
-        # Try these methods in order:
-        # Method 1: Direct API key (uncomment and add your key)
-        # chat = ContinuousVoiceChat("your_api_key_here")
-
-        # Method 2: Environment variable or config file
-        chat = ContinuousVoiceChat()
+        print("🎙️ Welcome to Voice Conversational AI!")
+        print("=" * 50)
+        
+        # Option to disable voice response
+        voice_enabled = True
+        try:
+            # You can change this to False to disable voice responses
+            # voice_enabled = False
+            pass
+        except:
+            pass
+        
+        # Initialize with voice response capability
+        chat = ContinuousVoiceChat(enable_voice_response=voice_enabled)
         chat.run()
 
     except ValueError as e:
         print(f"❌ Setup Error: {e}")
-        print("\n🔧 Quick Fix Options:")
-        print("1. Create a file called 'api_key.txt' in the same folder and paste your key there")
-        print("2. Or edit the script and put your key directly in line 149")
-        print("3. Or use Windows command: set OPENROUTER_API_KEY=your_key && python STT_whisper.py")
+        print("\n🔧 Quick Setup:")
+        print("1. Copy 'env_template' to '.env'")
+        print("2. Edit .env and add your OpenRouter API key")
+        print("3. Install dependencies: pip install -r requirements.txt")
     except Exception as e:
         print(f"❌ Error: {e}")

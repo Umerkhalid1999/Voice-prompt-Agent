@@ -1,4 +1,7 @@
 pyaudio
 numpy
 openai-whisper
-requests 
+requests
+edge-tts
+pygame
+python-dotenv 

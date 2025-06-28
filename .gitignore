@@ -1,1 +1,5 @@
 .env
+__pycache__/
+*.wav
+api_key.txt
+temp_audio*.wav
